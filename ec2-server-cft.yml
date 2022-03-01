@@ -1,17 +1,16 @@
-Description: This template deploys an EC2 instance and configures it to run a minecraft server.
-# Use public Systems Manager Parameter
-## https://aws.amazon.com/blogs/compute/query-for-the-latest-amazon-linux-ami-ids-using-aws-systems-manager-parameter-store/
+Description: This template deploys an EC2 instance and configures it to run a vanilla Minecraft server.
+
 Parameters:
   EC2LatestAmiId:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
   EC2InstanceType:
     Type: String
-    Default: c5a.large
+    Default: m5a.large
     AllowedValues:
-      - c5a.large
       - m5a.large
-    Description: Enter c5a.large or m5a.large. Default is c5a.large.
+      - c5a.large
+    Description: Enter m5a.large or c5a.large. Default is m5a.large.
   SGUserIPAddress:
     Type: String
     Description: 'Enter your public IP address for whitelisting. Example: 10.10.10.10/32'
@@ -31,7 +30,11 @@ Parameters:
     Type: 'AWS::EC2::Subnet::Id'
     Description: Choose the VPC subnet ID.
     ConstraintDescription: Must be the ID of an existing VPC subnet.
-    
+  EC2MinecraftServerJar:
+    Type: String
+    Description: 'Enter the URL of the Minecraft server download. Example: https://launcher.mojang.com/v1/objects/c8f83c5655308435b3dcf03c06d9fe8740a77469/server.jar'
+    Description: Enter the URL of the Minecraft server download.
+
 Resources:
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -79,7 +82,17 @@ Resources:
         - Key: purpose
           Value: minecraft-server
       UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          yum install update -y
-          yum install java-17-amazon-corretto-devel -y
+        Fn::Base64: !Sub
+          - |
+            #!/bin/bash -xe
+            yum install update -y
+            yum install java-17-amazon-corretto-devel -y
+            mkdir /opt/minecraft
+            wget ${download_url} -O /opt/minecraft/server.jar
+            echo "eula=true" > /opt/minecraft/eula.txt
+            echo "java -Xmx7G -Xms1024M -jar server.jar nogui" > /opt/minecraft/start.sh
+            echo -e "[Unit]\nDescription=Minecraft Server\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=oneshot\nWorkingDirectory=/opt/minecraft\nExecStart=/opt/minecraft/start.sh\n\n[Install]\nWantedBy=multi-user.target\n\n# cp minecraft.service /etc/systemd/system/minecraft.service\n# sudo systemctl daemon-reload\n#sudo systemctl enable minecraft.service\n" > minecraft.service
+            systemctl daemon-reload
+            systemctl enable minecraft.service
+            systemctl start minecraft.service
+          - download_url: !Ref EC2MinecraftServerJar
