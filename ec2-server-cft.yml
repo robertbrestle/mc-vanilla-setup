@@ -1,0 +1,85 @@
+Description: This template deploys an EC2 instance and configures it to run a minecraft server.
+# Use public Systems Manager Parameter
+## https://aws.amazon.com/blogs/compute/query-for-the-latest-amazon-linux-ami-ids-using-aws-systems-manager-parameter-store/
+Parameters:
+  EC2LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+  EC2InstanceType:
+    Type: String
+    Default: c5a.large
+    AllowedValues:
+      - c5a.large
+      - m5a.large
+    Description: Enter c5a.large or m5a.large. Default is c5a.large.
+  SGUserIPAddress:
+    Type: String
+    Description: 'Enter your public IP address for whitelisting. Example: 10.10.10.10/32'
+  EC2Name:
+    Type: String
+    Default: minecraft01
+    Description: Enter the name of the EC2 instance.
+  EC2KeyName:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Description: Choose a key pair that is available in this region.
+    ConstraintDescription: Must be the name of an existing EC2 key pair.
+  SGVPCId:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: Choose the virtual private cloud ID.
+    ConstraintDescription: Must be the ID of an existing VPC.
+  ENIVPCSubnetId:
+    Type: 'AWS::EC2::Subnet::Id'
+    Description: Choose the VPC subnet ID.
+    ConstraintDescription: Must be the ID of an existing VPC subnet.
+    
+Resources:
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join [ '', [ !Ref EC2Name, '-sg' ] ]
+      GroupDescription: Enable SSH access to a specific IP, and public access to the game port 25565.
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SGUserIPAddress
+        - IpProtocol: tcp
+          FromPort: 25565
+          ToPort: 25565
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref SGVPCId
+  EC2NetworkInterface:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref ENIVPCSubnetId
+      Description: !Join [ 'Primary network interface for ', [ !Ref EC2Name ]]
+      GroupSet:
+        - !Ref EC2SecurityGroup
+      SourceDestCheck: true
+      Tags:
+        - Key: Name
+          Value: !Ref EC2Name
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref EC2LatestAmiId
+      KeyName: !Ref EC2KeyName
+      InstanceType: !Ref EC2InstanceType
+      NetworkInterfaces:
+        - NetworkInterfaceId: !Ref EC2NetworkInterface
+          DeviceIndex: 0
+      Tags:
+        - Key: Name
+          Value: !Ref EC2Name
+        - Key: purpose
+          Value: minecraft-server
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum install update -y
+          yum install java-17-amazon-corretto-devel -y
