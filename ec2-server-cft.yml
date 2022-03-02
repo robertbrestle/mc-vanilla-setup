@@ -9,7 +9,9 @@ Parameters:
     Default: m5a.large
     AllowedValues:
       - m5a.large
+      - m5a.xlarge
       - c5a.large
+      - c5a.xlarge
     Description: Enter m5a.large or c5a.large. Default is m5a.large.
   SGUserIPAddress:
     Type: String
@@ -33,7 +35,6 @@ Parameters:
   EC2MinecraftServerJar:
     Type: String
     Description: 'Enter the URL of the Minecraft server download. Example: https://launcher.mojang.com/v1/objects/c8f83c5655308435b3dcf03c06d9fe8740a77469/server.jar'
-    Description: Enter the URL of the Minecraft server download.
 
 Resources:
   EC2SecurityGroup:
@@ -76,23 +77,30 @@ Resources:
       NetworkInterfaces:
         - NetworkInterfaceId: !Ref EC2NetworkInterface
           DeviceIndex: 0
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs: 
+            VolumeType: gp3
+            VolumeSize: 16
+            DeleteOnTermination: true
+            Encrypted: false
       Tags:
         - Key: Name
           Value: !Ref EC2Name
         - Key: purpose
           Value: minecraft-server
       UserData:
-        Fn::Base64: !Sub
-          - |
+        Fn::Base64:
+          !Sub |
             #!/bin/bash -xe
             yum install update -y
             yum install java-17-amazon-corretto-devel -y
             mkdir /opt/minecraft
-            wget ${download_url} -O /opt/minecraft/server.jar
+            wget ${EC2MinecraftServerJar} -O /opt/minecraft/server.jar
             echo "eula=true" > /opt/minecraft/eula.txt
             echo "java -Xmx7G -Xms1024M -jar server.jar nogui" > /opt/minecraft/start.sh
-            echo -e "[Unit]\nDescription=Minecraft Server\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=oneshot\nWorkingDirectory=/opt/minecraft\nExecStart=/opt/minecraft/start.sh\n\n[Install]\nWantedBy=multi-user.target\n\n# cp minecraft.service /etc/systemd/system/minecraft.service\n# sudo systemctl daemon-reload\n#sudo systemctl enable minecraft.service\n" > minecraft.service
+            chmod +x /opt/minecraft/start.sh
+            echo -e "[Unit]\nDescription=Minecraft Server\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=oneshot\nWorkingDirectory=/opt/minecraft\nExecStart=/opt/minecraft/start.sh\n\n[Install]\nWantedBy=multi-user.target\n\n# cp minecraft.service /etc/systemd/system/minecraft.service\n# sudo systemctl daemon-reload\n#sudo systemctl enable minecraft.service\n" > /etc/systemd/system/minecraft.service
             systemctl daemon-reload
             systemctl enable minecraft.service
             systemctl start minecraft.service
-          - download_url: !Ref EC2MinecraftServerJar
