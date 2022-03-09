@@ -93,12 +93,12 @@ Resources:
         Fn::Base64:
           !Sub |
             #!/bin/bash -xe
-            yum install update -y
-            yum install java-17-amazon-corretto-devel -y
+            sudo yum install update -y
+            sudo yum install java-17-amazon-corretto-devel -y
             mkdir /opt/minecraft
             wget ${EC2MinecraftServerJar} -O /opt/minecraft/server.jar
             echo "eula=true" > /opt/minecraft/eula.txt
-            echo "java -Xmx7G -Xms1024M -jar server.jar nogui" > /opt/minecraft/start.sh
+            echo -e "#!/bin/bash\njava -Xmx7G -Xms1024M -jar server.jar nogui" > /opt/minecraft/start.sh
             chmod +x /opt/minecraft/start.sh
             echo -e "[Unit]\nDescription=Minecraft Server\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=oneshot\nWorkingDirectory=/opt/minecraft\nExecStart=/opt/minecraft/start.sh\n\n[Install]\nWantedBy=multi-user.target\n\n# cp minecraft.service /etc/systemd/system/minecraft.service\n# sudo systemctl daemon-reload\n#sudo systemctl enable minecraft.service\n" > /etc/systemd/system/minecraft.service
             systemctl daemon-reload
